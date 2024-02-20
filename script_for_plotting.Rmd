@@ -1,0 +1,114 @@
+---
+title: "Repeated analysis"
+output: html_notebook
+---
+
+Perform repeated rarefaction pipeline and calculate index for how well it clusters.
+```{r}
+function(count, info, repeats, threshold, method, sample_id, colorb, shapeb, groupb) {
+  
+  #Calls the main function to perform repeated rarefaction
+  complete_ordination <- main_rep_raref(count, info, repeats, threshold, method, sample_id, colorb, shapeb, cloud= F, ellipse=T)
+  
+  #Extract just position data and create a list of "true" clusters
+  just_positions <- as.data.frame(complete_ordination$df_mean[,1:2])
+  cluster_true_pre <- unlist(complete_ordination$df_mean[groupb])
+  cluster_names <- list()
+  cluster_true <- cluster_true_pre
+  
+  #Index function requires clusters to be numbered.
+  #Therefore whatever the cluster names are called, they are here converted to numbers
+  existing_groups <- unique(cluster_true)
+  for (x in 1:length(cluster_true_pre)) {
+    cluster_true[x] <- which(existing_groups == cluster_true_pre[x])
+  }
+
+  #Calculate index
+  #It's possible to change which index is used
+  #Currently it's set to G1
+  cluster_true <- as.numeric(unlist(cluster_true))
+  return(index.G1(just_positions,cluster_true))
+}
+
+```
+
+
+
+Create plot with index values
+```{r}
+threshhold <- seq.int(5, 250, by=1) #list of thresholds to use
+index_data <- matrix(ncol =3, nrow =0)
+colnames(index_data) <- c("Repeat Amount", "Threshold", "Index")
+
+#If you want to add more data to the same plot, for example to include different
+#repeat settings, just comment out the second row to stop it from resetting when
+#when running again
+
+count <- #table with count data
+info <- #table with information
+repeats <- 10
+method <- "PCoA"
+
+#Set which columns in info table to get this information. String input
+sample_id <- "sample_id"
+colorb <-
+shapeb <-
+groupb <- 
+
+#Loops through all thresholds set in the parameter above
+for (x in threshhold) {
+  print(paste("Running with ",x," threshold"))
+  index <- get_index(count, info, repeats, threshold = x, method, sample_id, colorb, shapeb, groupb)
+  index_data <- rbind(index_data, c(toString(repeats), x, index))
+}
+
+
+colnames(index_data) <- c("Repeat_Amount", "Threshold", "Index")
+index_data <- as.data.frame(index_data)
+index_data$Threshold <- as.numeric(index_data$Threshold)
+index_data$Index <- as.numeric(index_data$Index)
+ 
+ggplot(index_data,aes(x=Threshold,y=Index,color=Repeat_Amount)) + geom_point() + labs(x = "Rarefaction Threshold", y ="Calinski-Harabasz pseudo F-statistic")
+```
+
+
+
+Create boxplot showing off variance for different threshold and repeats
+```{r}
+threshhold <- rep(200, 100) #list of thresholds to use
+index_data <- matrix(ncol =4, nrow =0)
+colnames(index_data) <- c("Repeat Amount", "Threshold", "Index", "Thershold_chr")
+
+#If you want to add more data to the same plot, for example to include different
+#repeat settings, just comment out the second row to stop it from resetting when
+#when running again
+
+count <- #table with count data
+info <- #table with information
+repeats <- 10
+method <- "PCoA"
+
+#Set which columns in info table to get this information. String input
+sample_id <- "sample_id"
+colorb <-
+shapeb <-
+groupb <- 
+
+#Loops through all thresholds set in the parameter above
+for (x in threshhold) {
+  print(paste("Running with ",x," threshold"))
+  index <- get_index(count, info, repeats, threshold = x, method, sample_id, colorb, shapeb, groupb)
+  m_index_data <- rbind(m_index_data, c(toString(repeats), x, index, as.character(x)))
+}
+
+
+colnames(m_index_data) <- c("Repeat_Amount", "Threshold", "Index", "Threshold_chr")
+m_index_data <- as.data.frame(m_index_data)
+m_index_data$Threshold <- as.numeric(m_index_data$Threshold)
+m_index_data$Index <- as.numeric(m_index_data$Index)
+ 
+
+ggplot(m_index_data, aes(x=Threshold_chr, y=Index, fill=Repeat_Amount)) + geom_boxplot()
+
+
+```

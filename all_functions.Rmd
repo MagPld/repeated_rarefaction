@@ -1,0 +1,126 @@
+---
+title: "Functions to perform repeated rarefaction"
+output: html_notebook
+---
+
+Required Packages
+```{r}
+library(vegan)
+library(phyloseq)
+```
+
+
+
+```{r}
+main_rep_raref <- function(count, info, repeats, threshold, method, sample_id , colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+  
+  step1 <- rep_raref(count, info, threshold, repeats)
+  step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, repeats, method, sample_id)
+  step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_mean, colorb, shapeb, cloud, ellipse)
+  
+  return(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_mean" = step2$df_mean, "plot" = step3))
+}
+
+```
+
+
+```{r}
+rep_raref <- function(count, info, threshold, repeats) {
+  
+  
+  if (repeats == 0 ) {
+    warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
+  }
+  
+    if (repeats < 0 ) {
+    warning("repeats can't be negative. It needs to be a positive integer. Performs rarefaction without repetition.")
+  }
+  
+  #Set up working files and perform one initial rarefaction
+  rarified_count <- rrarefy(t(count),threshold)
+  duplicated_info <- info
+  sample_names_list1 <- row.names(info)
+  sample_names_list2 <- colnames(count)
+  
+  #Perform repeated rarefaction
+  #If repeats = 1, skips loop as no repetitions are needed.
+  if (repeats > 1) {
+    for (x in 2:repeats){
+      rarified_count <- rbind(rarified_count,rrarefy(t(count),threshold))
+      duplicated_info <- rbind(duplicated_info, info)
+      sample_names_list1 <- append(sample_names_list1,paste0(row.names(info), paste0("_", x)))
+      sample_names_list2 <- append(sample_names_list2,paste0(colnames(count), paste0("_", x)))
+      }
+  }
+  
+  rarified_count <- decostand(rarified_count, "normalize")
+  
+  #Transform both count data and info into dataframes
+  #Corrects row names for compatibility in ordination function.
+  duplicated_info <- as.data.frame(duplicated_info)
+  row.names(duplicated_info) <- sample_names_list1
+  rarified_count <- as.data.frame(rarified_count)
+  row.names(rarified_count) <- sample_names_list2
+  
+  return(list("repeat_count" = rarified_count, "repeat_info" = duplicated_info))
+}
+```
+
+
+```{r}
+ord_and_mean <- function(repeat_count, repeat_info, repeats, method, sample_id) {
+  
+  if (!(sample_id %in% colnames(repeat_info))){
+    stop(paste0(sample_id, " is not a column name in input for repeat_info."))
+  }
+  
+  #Convert the input into physeq objects
+  rare_count_phy_repeat <- otu_table(t(repeat_count), taxa_are_rows=T)
+  sample_info_tab_phy_repeat <- sample_data(repeat_info)
+  rare_physeq_repeat <- phyloseq(rare_count_phy_repeat,sample_info_tab_phy_repeat)
+  
+  #Perform the Ordination calculation
+  vst_pcoa <- ordinate(rare_physeq_repeat, method=method, distance="bray")
+  
+  #Convert ordination result into a data frame object
+  my_plot <- (plot_ordination(rare_physeq_repeat, vst_pcoa,justDF = TRUE))
+    
+  #Create matrix with mean position for each sample
+  coordinates <- my_plot[,c(1,2)]
+  sum_test <- as.data.frame(rowsum(coordinates, unlist(my_plot[sample_id])))
+  sum_test <- as.data.frame(sum_test/repeats)
+  
+  #Add info to mean location data frame
+  mean_df <- my_plot[1:length(sum_test[,1]),]
+  mean_df[,1] <- sum_test[,1]
+  mean_df[,2] <- sum_test[,2]
+
+  return(list("ordinate_object" = vst_pcoa, "physeq_object" = rare_physeq_repeat, "df_all" = my_plot, "df_mean" = mean_df))
+}
+```
+
+
+```{r}
+plot_rep_raref <- function(ordination, physeq, all_positions, mean_positions, color, shape, cloud, ellipse) {
+  
+  color_mean <- unlist(mean_positions[color])
+  color_tot <- unlist(all_positions[color])
+
+  shape_mean <- unlist(mean_positions[shape])
+  shape_tot <- unlist(all_positions[shape])
+
+  #Create the plot and print it
+  p <- plot_ordination(physeq, ordination, color = color, shape = shape)
+  if (!cloud){ p$layers <- p$layers[-1] }
+  p <- p + {if(ellipse)stat_ellipse(linetype = 1,lwd = 0.8, aes(color=color_tot, group=all_positions$sample_id))} +
+    {if(!cloud)geom_point(data=mean_positions, mapping =aes(x=mean_positions[,1], y=mean_positions[,2], color=color_mean, shape=shape_mean))}
+  
+  return(p)
+}
+  
+
+```
+
+
+
+
