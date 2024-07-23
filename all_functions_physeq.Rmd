@@ -1,0 +1,196 @@
+---
+title: "Functions to perform repeated rarefaction"
+output: html_notebook
+---
+
+Test run
+```{r}
+
+#To perform only the repeated rarefaction and produce an ordination plot
+main_rep_raref(rare_physeq_burkina, 20, 500, "NMDS", "sample_id", "location", "type", T)
+
+#Test several values on the threshold
+test_threshold(rare_physeq_burkina, repeats = c(5,10), sample_id =  "sample_id", groupb = "location")
+```
+
+
+Required Packages
+```{r}
+library(vegan)
+library(phyloseq)
+library(clusterSim)
+library(ggplot2)
+```
+
+
+Main function to perform repeated rarefaction and produce ordination plot
+```{r}
+main_rep_raref <- function(physeq, repeats, threshold, method, sample_id , colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+  
+  step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
+  step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, repeats, method, sample_id)
+  step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_mean, colorb, shapeb, cloud, ellipse)
+  
+  return(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_mean" = step2$df_mean, "plot" = step3))
+}
+
+```
+
+
+Perform repeated rarefaction. Outputs new dataframes with the repeated rarified samples and information
+```{r}
+rep_raref <- function(count, info, threshold, repeats) {
+  
+  
+  if (repeats == 0 ) {
+    warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
+  }
+  
+    if (repeats < 0 ) {
+    warning("repeats can't be negative. It needs to be a positive integer. Performs rarefaction without repetition.")
+  }
+  
+  #Set up working files and perform one initial rarefaction
+  rarified_count <- rrarefy(t(count),threshold)
+  duplicated_info <- info
+  sample_names_list1 <- row.names(info)
+  sample_names_list2 <- colnames(count)
+  
+  #Perform repeated rarefaction
+  #If repeats = 1, skips loop as no repetitions are needed.
+  if (repeats > 1) {
+    for (x in 2:repeats){
+      rarified_count <- rbind(rarified_count,rrarefy(t(count),threshold))
+      duplicated_info <- rbind(duplicated_info, info)
+      sample_names_list1 <- append(sample_names_list1,paste0(row.names(info), paste0("_", x)))
+      sample_names_list2 <- append(sample_names_list2,paste0(colnames(count), paste0("_", x)))
+      }
+  }
+  
+  rarified_count <- decostand(rarified_count, "normalize")
+  
+  #Transform both count data and info into dataframes
+  #Corrects row names for compatibility in ordination function.
+  duplicated_info <- as.data.frame(duplicated_info)
+  row.names(duplicated_info) <- sample_names_list1
+  rarified_count <- as.data.frame(rarified_count)
+  row.names(rarified_count) <- sample_names_list2
+  
+  return(list("repeat_count" = rarified_count, "repeat_info" = duplicated_info))
+}
+```
+
+
+Perform ordination calucaltion, and calucaltion to produce a mean position for each sample.
+```{r}
+ord_and_mean <- function(repeat_count, repeat_info, repeats, method, sample_id) {
+  
+  if (!(sample_id %in% colnames(repeat_info))){
+    stop(paste0(sample_id, " is not a column name in input for repeat_info."))
+  }
+  
+  #Convert the input into physeq objects
+  rare_count_phy_repeat <- otu_table(t(repeat_count), taxa_are_rows=T)
+  sample_info_tab_phy_repeat <- sample_data(repeat_info)
+  rare_physeq_repeat <- phyloseq(rare_count_phy_repeat,sample_info_tab_phy_repeat)
+  
+  #Perform the Ordination calculation
+  vst_pcoa <- ordinate(rare_physeq_repeat, method=method, distance="bray")
+  
+  #Convert ordination result into a data frame object
+  my_plot <- (plot_ordination(rare_physeq_repeat, vst_pcoa,justDF = TRUE))
+    
+  #Create matrix with mean position for each sample
+  coordinates <- my_plot[,c(1,2)]
+  sum_test <- as.data.frame(rowsum(coordinates, unlist(my_plot[sample_id])))
+  sum_test <- as.data.frame(sum_test/repeats)
+  
+  #Add info to mean location data frame
+  mean_df <- my_plot[1:length(sum_test[,1]),]
+  mean_df[,1] <- sum_test[,1]
+  mean_df[,2] <- sum_test[,2]
+
+  return(list("ordinate_object" = vst_pcoa, "physeq_object" = rare_physeq_repeat, "df_all" = my_plot, "df_mean" = mean_df))
+}
+```
+
+
+Plots repeated rarefaction. Allows some visual settings.
+```{r}
+plot_rep_raref <- function(ordination, physeq, all_positions, mean_positions, color, shape, cloud, ellipse) {
+  
+  color_mean <- unlist(mean_positions[color])
+  color_tot <- unlist(all_positions[color])
+
+  shape_mean <- unlist(mean_positions[shape])
+  shape_tot <- unlist(all_positions[shape])
+
+  #Create the plot and print it
+  p <- plot_ordination(physeq, ordination, color = color, shape = shape)
+  if (!cloud){ p$layers <- p$layers[-1] }
+  p <- p + {if(ellipse)stat_ellipse(linetype = 1,lwd = 0.8, aes(color=color_tot, group=all_positions$sample_id))} +
+    {if(!cloud)geom_point(data=mean_positions, mapping =aes(x=mean_positions[,1], y=mean_positions[,2], color=color_mean, shape=shape_mean))}
+  
+  return(p)
+}
+  
+
+```
+
+
+Calucalte the performance of a single ordination calculation based on groupings. Higher value is better.
+```{r}
+get_index <- function(rare_phys, repeats, threshold, method, sample_id, groupb) {
+  
+  #Calls the first two steps of the repeated rarefaction methods
+  step1 <- rep_raref(as(otu_table(rare_phys), "matrix"), sample_data(rare_phys), threshold, repeats)
+  step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, repeats, method, sample_id)
+  
+  #Extract just position data and create a list of "true" clusters
+  just_positions <- as.data.frame(step2$df_mean[,1:2])
+  cluster_true_pre <- unlist(step2$df_mean[groupb])
+  cluster_names <- list()
+  cluster_true <- cluster_true_pre
+  
+  #Index function requires clusters to be numbered.
+  #Therefore whatever the cluster names are called, they are here converted to numbers
+  existing_groups <- unique(cluster_true)
+  for (x in 1:length(cluster_true_pre)) {
+    cluster_true[x] <- which(existing_groups == cluster_true_pre[x])
+  }
+
+  #Calculate index
+  #It's possible to change which index is used
+  #Currently it's set to G1
+  cluster_true <- as.numeric(unlist(cluster_true))
+  return(index.G1(just_positions,cluster_true))
+}
+```
+
+
+Create plot with index values
+```{r}
+test_threshold <- function(rare_phys, repeats=10, t_min = 5, t_max = 250, t_step =  1, method = "NMDS", sample_id, groupb){
+  
+  thresholds = as.integer(seq.int(t_min, t_max, by=t_step))
+  index_data <- matrix(ncol =3, nrow =0)
+  colnames(index_data) <- c("Repeat_Amount","Threshold", "Index")
+
+  #Loops through all thresholds set in the parameter above
+  for (y in repeats) {
+    for (x in thresholds) {
+      print(paste("Running with ", y, " repeats and ",x," threshold"))
+      index <- get_index(rare_phys, y, threshold = x, method, sample_id, groupb)
+      index_data <- rbind(index_data, c(toString(y), x, index))
+    }
+  }
+
+
+  #colnames(index_data) <- c("Repeat_Amount", "Threshold", "Index")
+  index_data <- as.data.frame(index_data)
+  index_data$Threshold <- as.numeric(index_data$Threshold)
+  index_data$Index <- as.numeric(index_data$Index)
+ 
+  ggplot(index_data,aes(x=Threshold,y=Index,color=Repeat_Amount)) + geom_point() + labs(x = "Rarefaction Threshold", y ="Calinski-Harabasz pseudo F-statistic")
+}
+```
