@@ -140,10 +140,10 @@ plot_rep_raref <- function(ordination, physeq, all_positions, mean_positions, co
 
 Calucalte the performance of a single ordination calculation based on groupings. Higher value is better.
 ```{r}
-get_index <- function(rare_phys, repeats, threshold, method, sample_id, groupb) {
+get_index <- function(physeq, repeats, threshold, method, sample_id, groupb) {
   
   #Calls the first two steps of the repeated rarefaction methods
-  step1 <- rep_raref(as(otu_table(rare_phys), "matrix"), sample_data(rare_phys), threshold, repeats)
+  step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
   step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, repeats, method, sample_id)
   
   #Extract just position data and create a list of "true" clusters
@@ -170,7 +170,7 @@ get_index <- function(rare_phys, repeats, threshold, method, sample_id, groupb) 
 
 Create plot with index values
 ```{r}
-test_threshold <- function(rare_phys, repeats=10, t_min = 5, t_max = 250, t_step =  1, method = "NMDS", sample_id, groupb){
+test_threshold <- function(physeq, repeats=10, t_min = 5, t_max = 250, t_step =  1, method = "NMDS", sample_id, groupb){
   
   thresholds = as.integer(seq.int(t_min, t_max, by=t_step))
   index_data <- matrix(ncol =3, nrow =0)
@@ -180,7 +180,7 @@ test_threshold <- function(rare_phys, repeats=10, t_min = 5, t_max = 250, t_step
   for (y in repeats) {
     for (x in thresholds) {
       print(paste("Running with ", y, " repeats and ",x," threshold"))
-      index <- get_index(rare_phys, y, threshold = x, method, sample_id, groupb)
+      index <- get_index(physeq, y, threshold = x, method, sample_id, groupb)
       index_data <- rbind(index_data, c(toString(y), x, index))
     }
   }
