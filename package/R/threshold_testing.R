@@ -32,8 +32,8 @@ get_index <- function(physeq, sample_info, repeats, threshold, method, sample_id
   step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, sample_info, repeats, method, sample_id)
 
   # Extract just position data and create a list of "true" clusters
-  just_positions <- as.data.frame(step2$df_mean[, 1:2])
-  cluster_true_pre <- unlist(step2$df_mean[groupb])
+  just_positions <- as.data.frame(step2$df_median[,2:3])
+  cluster_true_pre <- unlist(step2$df_median[groupb])
   cluster_names <- list()
   cluster_true <- cluster_true_pre
 
@@ -52,5 +52,5 @@ get_index <- function(physeq, sample_info, repeats, threshold, method, sample_id
 
   clusterSim::index.G1(just_positions, cluster_true) #Throws error about matrix (invalid nrow value)
   print("test4")
-  return(index.G1(just_positions, cluster_true)) #Throws error: can't find index.G1 function
+  return(clusterSim::index.G1(just_positions, cluster_true)) #Throws error: can't find index.G1 function
 }
