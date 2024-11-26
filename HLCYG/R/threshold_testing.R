@@ -8,10 +8,9 @@
 #' @param method A string. Currently only "NMDS" supported.
 #' @param sample_id A string. Name of the column with sample IDs.
 #' @param groupb A string. Name of the column with data to group the points by.
-#' @returns A list with repeat count table, repeat info table, ordination object, physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
+#' @returns A graph with rarefaction threshold as the x axis, and the y axis is the calculated Calinski-Harabasz F-statistic. Each dot is the score for one threshold attempt. The higher score the better.
 #' @examples
-
-
+#' test_threshold(HLCYG_physeq_data, repeats = 5, t_step = 10, method= "NMDS", sample_id = "sample_id", groupb = "location")
 test_threshold <- function(physeq, repeats = 10, t_min = 5, t_max = 250, t_step = 1, method = "NMDS", sample_id, groupb) {
   thresholds <- as.integer(seq.int(t_min, t_max, by = t_step))
   index_data <- matrix(nrow = 0, ncol = 3)
@@ -40,6 +39,17 @@ test_threshold <- function(physeq, repeats = 10, t_min = 5, t_max = 250, t_step 
     geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = F)
 }
 
+
+#' Performs repeatead rarefaction once and calculates a performance value
+#'
+#' @param physeq A phyloseq object.
+#' @param sample_info Sample Data object from the phyloseq package. Contains data info without repetitions.
+#' @param repeats A positive integer. Indicates the amount of repeats run. A value = 1 means no repeats are used.
+#' @param threshold A positive integer. The threshold value for the rarefaction.
+#' @param method A string. Currently only "NMDS" supported.
+#' @param sample_id A string. Name of the column with sample IDs.
+#' @param groupb A string. Name of the column with data to group the points by.
+#' @returns Returns the Calinski-Harabasz F-statistic score.
 get_index <- function(physeq, sample_info, repeats, threshold, method, sample_id, groupb) {
   # Calls the first two steps of the repeated rarefaction methods
   step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)

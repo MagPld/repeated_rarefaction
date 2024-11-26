@@ -1,15 +1,18 @@
 #' Perform one iteration of repeated rarefaction and produce ordination plot
 #'
 #' @param physeq A phyloseq object.
-#' @param repeats A positive integer. Indicates the amount of repeats run. A value = 1 means no repeats are used.
+#' @param repeats A positive integer. Indicates the amount of repeats run.
+#' A value = 1 means no repeats are used.
 #' @param threshold A positive integer. The threshold value for the rarefaction.
 #' @param method A string. Currently only "NMDS" supported.
 #' @param sample_id A string. Name of the column with sample IDs.
 #' @param colorb A string. Name of the column with data to colour the graph by.
 #' @param shapeb A string. Name of the column with data to shape the points on the graph by.
-#' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE. TRUE shows datapoints for all repeats.
+#' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE.
+#' TRUE shows datapoints for all repeats.
 #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
-#' @returns A list with repeat count table, repeat info table, ordination object, physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
+#' @returns A list with repeat count table, repeat info table, ordination object,
+#' physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, 5, 500, "NMDS", "sample_id", "location", "type", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, 10, 250, "NMDS", "sample_id", "location", "type", T, T)
@@ -21,6 +24,16 @@ repeated_rarefaction <- function(physeq, repeats, threshold, method, sample_id, 
   return(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3))
 }
 
+#' Rarefaction is perforned reaptedly depending on input and a matrix containing all data is created together with a an info file reflecting it.
+#'
+#' @param count A matrix. An otu-table containing the count data the rarefaction should be performed on.
+#' @param info Sample Data object from the phyloseq package.
+#' Should contain info about the count data with matching column names.
+#' @param threshold An integer. The threshold value at which to perform rarefaction.
+#' @param repeats An integer. The amount of repeated rarefactions to perform.
+#' A value = 1 means only one iteration of rarefaction is perfomed and therefore no repeats.
+#' @returns A list containing a matrix with the repeated count table and another
+#' matrix with the repeated info.
 rep_raref <- function(count, info, threshold, repeats) {
   if (repeats == 0) {
     warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
@@ -59,6 +72,17 @@ rep_raref <- function(count, info, threshold, repeats) {
   return(list("repeat_count" = rarified_count, "repeat_info" = duplicated_info))
 }
 
+#' Calculates ordination on the repeated count input and as well as a median result for each original datapoint.
+#'
+#' @param repeat_count A matrix. Contains the repeated count data.
+#' @param repeat_info A matrix. Contains the repeated data info.
+#' @param sample_info Sample Data object from the phyloseq package. Contains data info without repetitions.
+#' @param repeats An integer. The amount of repeats that has been performed on the data.
+#' @param method A string. Currently only "NMDS" supported.
+#' @param sample_id A string. Name of the column with sample IDs.
+#' @returns Returns a list containg an ordination object, a phyloseq object with
+#' the repeated count data, a dataframe with all positions from the ordination
+#' calculaction, and a datafram with just the median position from the calculation.
 ord_and_mean <- function(repeat_count, repeat_info, sample_info, repeats, method, sample_id) {
   if (!(sample_id %in% colnames(repeat_info))) {
     stop(paste0(sample_id, " is not a column name in input for repeat_info."))
@@ -88,6 +112,19 @@ ord_and_mean <- function(repeat_count, repeat_info, sample_info, repeats, method
   return(list("ordinate_object" = vst_pcoa, "physeq_object" = rare_physeq_repeat, "df_all" = my_plot, "df_median" = df_median))
 }
 
+
+#' Create a plot for the repeated rarefaction.
+#'
+#' @param ordination An ordination object.
+#' @param physeq A phyloseq object containing the data to be plotted.
+#' @param all_positions A dataframe containing position data for all repeats.
+#' @param mediant_positions A dataframe containing median position data for each original data point.
+#' @param color A string. Name of the column to color points by.
+#' @param shape A string. Name of the column to shape points by.
+#' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE.
+#' TRUE shows datapoints for all repeats.
+#' #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
+#' @returns Returns an ordination plot.
 plot_rep_raref <- function(ordination, physeq, all_positions, median_positions, color, shape, cloud, ellipse) {
   color_median <- unlist(median_positions[color])
   color_tot <- unlist(all_positions[color])
