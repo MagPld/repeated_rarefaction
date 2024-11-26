@@ -10,13 +10,11 @@ License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Remotes: 
-    bioc::phyloseq
 Depends: 
-    R (>= 2.10)
+    R (>= 4.3.1)
 Imports:
-    clusterSim,
-    dplyr,
-    ggplot2,
-    vegan
+    clusterSim (>= 0.51-3),
+    dplyr (>= 1.1.3),
+    ggplot2 (>= 3.4.3),
+    vegan (>= 2.6-4)
 LazyData: true
