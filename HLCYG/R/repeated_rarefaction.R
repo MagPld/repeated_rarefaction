@@ -13,7 +13,7 @@
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, 5, 500, "NMDS", "sample_id", "location", "type", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, 10, 250, "NMDS", "sample_id", "location", "type", T, T)
-repeated_rarefaction <- function(physeq, repeats, threshold, method, sample_id, colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method, sample_id, colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
   step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
   step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, sample_data(physeq), repeats, method, sample_id)
   step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_median, colorb, shapeb, cloud, ellipse)
