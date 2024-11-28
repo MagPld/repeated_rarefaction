@@ -11,9 +11,12 @@
 #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
 #' @returns A list with repeat count table, repeat info table, ordination object, physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
 #' @examples
-#' repeated_rarefaction(HLCYG_physeq_data, 5, 500, "NMDS", "sample_id", "location", "type", T, F)
-#' repeated_rarefaction(HLCYG_physeq_data, 10, 250, "NMDS", "sample_id", "location", "type", T, T)
-repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method, sample_id, colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+#' repeated_rarefaction(HLCYG_physeq_data, repeats=5, threshold=500, method="NMDS", colorb="sample_id", shapeb="location", T, F)
+#' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
+
+repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method ="NMDS", colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
+  sample_id <- "sample_id"
   step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
   step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, sample_data(physeq), repeats, method, sample_id)
   step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_median, colorb, shapeb, cloud, ellipse)
@@ -35,18 +38,49 @@ rep_raref <- function(count, info, threshold, repeats) {
   duplicated_info <- info
   sample_names_list1 <- row.names(info)
   sample_names_list2 <- colnames(count)
-
-  # Perform repeated rarefaction
-  # If repeats = 1, skips loop as no repetitions are needed.
+    
+#  Perform repeated rarefaction
+#  If repeats = 1, skips loop as no repetitions are needed.
+  
   if (repeats > 1) {
-    for (x in 2:repeats) {
-      rarified_count <- rbind(rarified_count, rrarefy(t(count), threshold))
-      duplicated_info <- rbind(duplicated_info, info)
-      sample_names_list1 <- append(sample_names_list1, paste0(row.names(info), paste0("_", x)))
-      sample_names_list2 <- append(sample_names_list2, paste0(colnames(count), paste0("_", x)))
-    }
-  }
+    # Preallocate memory based on expected dimensions
+    rarified_count <- matrix(NA, nrow = (repeats - 1) * nrow(rarified_count), ncol = ncol(rarified_count))
+    duplicated_info <-matrix(NA, nrow = (repeats - 1) * nrow(info), ncol = ncol(info))
+    sample_names_list1 <- character((repeats - 1) * nrow(info))
+    sample_names_list2 <- character((repeats - 1) * ncol(count))
 
+    # Initialize current row counters
+    current_row_rarified <- 1
+    current_row_info <- 1
+
+    for (x in 2:repeats) {
+      # Perform rarefaction
+      rarified_result <- rrarefy(t(count), threshold)
+      
+      # Assign to preallocated matrix, ensuring range matches the number of rows
+      rarified_count[current_row_rarified:(current_row_rarified + nrow(rarified_result) - 1),] <- rarified_result
+      duplicated_info[current_row_info:(current_row_info + nrow(info) - 1),] <- as.matrix(info)
+      
+      # Append sample names for this iteration
+      sample_names_list1[((x - 2) * nrow(info) + 1):((x - 1) * nrow(info))] <- paste0(row.names(info), "_", x)
+      sample_names_list2[((x - 2) * ncol(count) + 1):((x - 1) * ncol(count))] <- paste0(colnames(count), "_", x)
+
+      # Update the column indices
+      current_row_rarified <- current_row_rarified + nrow(rarified_result)
+      current_row_info <- current_row_info + nrow(info)
+    }
+
+    rownames(rarified_count) <- sample_names_list1
+    colnames(rarified_count) <- rownames(count)
+    rownames(duplicated_info) <- sample_names_list2
+    colnames(duplicated_info) <- colnames(info)
+
+    # Convert preallocated matrices to data frames if needed
+    rarified_count <- as.data.frame(rarified_count)
+    duplicated_info <- as.data.frame(duplicated_info)
+
+  }
+  
   rarified_count <- decostand(rarified_count, "normalize")
 
   # Transform both count data and info into dataframes
@@ -103,3 +137,4 @@ plot_rep_raref <- function(ordination, physeq, all_positions, median_positions, 
 
   return(p)
 }
+

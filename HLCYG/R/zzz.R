@@ -8,4 +8,8 @@
         }
         BiocManager::install(missing_packages)
     }
+    library(phyloseq)
+    library(vegan)
+    library(dplyr)
+    library(ggplot2)
 }
