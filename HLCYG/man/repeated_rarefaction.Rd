@@ -19,24 +19,27 @@ repeated_rarefaction(
 \arguments{
 \item{physeq}{A phyloseq object.}
 
-\item{repeats}{A positive integer.}
+\item{repeats}{A positive integer. Indicates the amount of repeats run.
+A value = 1 means no repeats are used.}
 
-\item{threshold}{A positive integer.}
+\item{threshold}{A positive integer. The threshold value for the rarefaction.}
 
-\item{method}{A string.}
+\item{method}{A string. Currently only "NMDS" supported.}
 
-\item{sample_id}{A string.}
+\item{sample_id}{A string. Name of the column with sample IDs.}
 
-\item{colorb}{A string.}
+\item{colorb}{A string. Name of the column with data to colour the graph by.}
 
-\item{shapeb}{A string.}
+\item{shapeb}{A string. Name of the column with data to shape the points on the graph by.}
 
-\item{cloud}{Boolean}
+\item{cloud}{Boolean. Aesthetic setting for the graph. Default is FALSE.
+TRUE shows datapoints for all repeats.}
 
-\item{ellipse}{Boolean}
+\item{ellipse}{Boolean. Aesthetic setting for the graph. Default is TRUE.}
 }
 \value{
-A list with repeat count table, repeat info table, ordination object, physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
+A list with repeat count table, repeat info table, ordination object,
+physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
 }
 \description{
 Perform one iteration of repeated rarefaction and produce ordination plot
