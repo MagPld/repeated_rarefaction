@@ -18,13 +18,43 @@
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
 
 repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method ="NMDS", colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+  if (!(colorb %in% names(sample_data(physeq)))) {
+    stop(paste("'",colorb,"' is not a column name in the sample information in the inputed phyloseq object.
+                  repeated_rarefaction needs an existing column to color the ordination plot by.", sep=""))
+  }
+  if (!(shapeb %in% names(sample_data(physeq)))) {
+    stop(paste("'",shapeb,"' is not a column name in the sample information in the inputed phyloseq object.
+                  repeated_rarefaction needs an existing column to shape points in the ordination plot by.", sep=""))
+  }
+
+  if (!(is.double(repeats))){
+    stop(paste("Input for repeats: '", repeats, "' is not an integer.", sep=""))
+  }
+
+  if (!(repeats == round(repeats))){
+    stop(paste("Input for repeats: '", repeats, "' is not an integer.", sep=""))
+  }
+
+  if (!(is.double(threshold))){
+    stop(paste("Input for threshold: '" ,threshold, "' is not an integer.", sep=""))
+  }
+
+  if (!(method == "NMDS")){
+    stop("The only ordination method supported is NMDS.")
+  }
+
+  if (repeats <=4 & ellipse == TRUE){
+    warning("Too few repeats to draw confidence ellipses.")
+    ellipse <- F
+  }
+
   sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
   sample_id <- "sample_id"
   step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
   step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, sample_data(physeq), repeats, method, sample_id)
   step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_median, colorb, shapeb, cloud, ellipse)
-
-  return(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3))
+  print(step3)
+  return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
 }
 
 #' Rarefaction is perforned reaptedly depending on input and a matrix containing all data is created together with a an info file reflecting it.
@@ -51,10 +81,10 @@ rep_raref <- function(count, info, threshold, repeats) {
   duplicated_info <- info
   sample_names_list1 <- row.names(info)
   sample_names_list2 <- colnames(count)
-    
+
 #  Perform repeated rarefaction
 #  If repeats = 1, skips loop as no repetitions are needed.
-  
+
   if (repeats > 1) {
     # Preallocate memory based on expected dimensions
     rarified_count <- matrix(NA, nrow = (repeats - 1) * nrow(rarified_count), ncol = ncol(rarified_count))
@@ -69,11 +99,11 @@ rep_raref <- function(count, info, threshold, repeats) {
     for (x in 2:repeats) {
       # Perform rarefaction
       rarified_result <- rrarefy(t(count), threshold)
-      
+
       # Assign to preallocated matrix, ensuring range matches the number of rows
       rarified_count[current_row_rarified:(current_row_rarified + nrow(rarified_result) - 1),] <- rarified_result
       duplicated_info[current_row_info:(current_row_info + nrow(info) - 1),] <- as.matrix(info)
-      
+
       # Append sample names for this iteration
       sample_names_list1[((x - 2) * nrow(info) + 1):((x - 1) * nrow(info))] <- paste0(row.names(info), "_", x)
       sample_names_list2[((x - 2) * ncol(count) + 1):((x - 1) * ncol(count))] <- paste0(colnames(count), "_", x)
@@ -93,7 +123,7 @@ rep_raref <- function(count, info, threshold, repeats) {
     duplicated_info <- as.data.frame(duplicated_info)
 
   }
-  
+
   rarified_count <- decostand(rarified_count, "normalize")
 
   # Transform both count data and info into dataframes

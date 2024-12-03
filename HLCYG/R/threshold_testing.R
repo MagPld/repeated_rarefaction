@@ -11,7 +11,29 @@
 #' @returns A graph with rarefaction threshold as the x axis, and the y axis is the calculated Calinski-Harabasz F-statistic. Each dot is the score for one threshold attempt. The higher score the better.
 #' @examples
 #' test_threshold(HLCYG_physeq_data, repeats = 5, t_step = 10, method= "NMDS", sample_id = "sample_id", groupb = "location")
-test_threshold <- function(physeq, repeats = 10, t_min = 5, t_max = 250, t_step = 1, method = "NMDS", sample_id, groupb) {
+test_threshold <- function(physeq, repeats = 10, t_min = 5, t_max = 250, t_step = 1, method = "NMDS", groupb) {
+
+  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
+  sample_id <- "sample_id"
+
+  if (!(groupb %in% names(sample_data(physeq)))) {
+    stop(paste("'",groupb, "' is not a column name in the sample information in the inputed phyloseq object.
+                  Test_threshold needs an existing column to cluster samples by.", sep=""))
+  }
+
+  if (!(is.double(repeats))){
+    stop(paste("Input for repeats: '", repeats, "' is not an integer.", sep=""))
+  }
+
+  if (!(repeats == round(repeats))){
+    stop(paste("Input for repeats: '", repeats, "' is not an integer.", sep=""))
+  }
+
+  if (!(method == "NMDS")){
+    stop("The only ordination method supported is NMDS.")
+  }
+
+
   thresholds <- as.integer(seq.int(t_min, t_max, by = t_step))
   index_data <- matrix(nrow = 0, ncol = 3)
   colnames(index_data) <- c("Repeat_Amount", "Threshold", "Index")
@@ -30,8 +52,6 @@ test_threshold <- function(physeq, repeats = 10, t_min = 5, t_max = 250, t_step 
   index_data <- as.data.frame(index_data)
   index_data$Threshold <- as.numeric(index_data$Threshold)
   index_data$Index <- as.numeric(index_data$Index)
-
-  print(index_data)
 
   ggplot(index_data, aes(x = Threshold, y = Index, color = Repeat_Amount)) +
     geom_point() +
