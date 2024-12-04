@@ -1,5 +1,3 @@
-##TODO: fix dependencies for package, it does not find doParallel or mshape function I think
-
 #' Perform one iteration of repeated rarefaction and produce ordination plot
 #'
 #' @param physeq A phyloseq object.
@@ -18,9 +16,15 @@
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=5, threshold=500, method="NMDS", colorb="sample_id", shapeb="location", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
-repeated_rarefaction_2 <- function(physeq, repeats = 10, threshold = 250, colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb="sample_id", shapeb="sample_id", cloud = FALSE, ellipse = TRUE) {
   
-  # ============ CHECKS & WARNINGS
+  # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
+  # (this covers the case in which no sample_id column is present in the sample data)
+  # Then set it to a separate variable.
+  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
+  
+  # ============ Checks and warnings
+  
   if (!(colorb %in% names(sample_data(physeq)))) {
     stop(paste("'",colorb,"' is not a column name in the sample information in the inputed phyloseq object.
                   repeated_rarefaction needs an existing column to color the ordination plot by.", sep=""))
@@ -46,20 +50,10 @@ repeated_rarefaction_2 <- function(physeq, repeats = 10, threshold = 250, colorb
     warning("Too few repeats to draw confidence ellipses.")
     ellipse <- F
   }
-
-  
-## TODO: MOVE THIS TO STEP 1 or 2
-  # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
-  # Then set it to a separate variable.
-  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
-  sample_id <- "sample_id"
-##
-  
   
   # Perform the different steps of the repeated rarefaction algorithm 
   step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold, repeats)
   step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats)
-  #TODO: shapeb, cloud, ellipse need to be added
   step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, colorb, shapeb, cloud, ellipse)
   print(step3)
   return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
@@ -92,7 +86,7 @@ rep_raref <- function(count, threshold, repeats) {
   if (repeats >= 1) {
     for (i in 1:repeats) {
       rarefied_count <- rrarefy(count, sample = threshold)
-      rarefied_matrices[[i]] <- decostand(rarefied_count, "normalize")
+      rarefied_matrices[[i]] <- rarefied_count
     }
   }
 
