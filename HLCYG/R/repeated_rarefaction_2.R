@@ -135,14 +135,8 @@ ord_and_mean <- function(rarefied_matrix_list, repeats) {
     colnames(ord_df) <- c("PCoA1", "PCoA2")
     ord_df$Sample <- rownames(ordination)
     
-    # Create a ggplot for the ordination
-    p <- ggplot(ord_df, aes(x = PCoA1, y = PCoA2)) +
-      geom_point() +
-      ggtitle(paste("Ordination", i)) +
-      theme_minimal()
-    
     # Return a list containing the ordination and the plot
-    list(ordination = ordination, plot = p)
+    list(ordination = ordination)
     
   }
   
