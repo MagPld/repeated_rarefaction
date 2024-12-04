@@ -16,7 +16,7 @@
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=5, threshold=500, method="NMDS", colorb="sample_id", shapeb="location", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
-repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb="sample_id", shapeb="sample_id", cloud = FALSE, ellipse = TRUE) {
+repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE) {
   
   # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
   # (this covers the case in which no sample_id column is present in the sample data)
@@ -29,8 +29,8 @@ repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb
     stop(paste("'",colorb,"' is not a column name in the sample information in the inputed phyloseq object.
                   repeated_rarefaction needs an existing column to color the ordination plot by.", sep=""))
   }
-  if (!(shapeb %in% names(sample_data(physeq)))) {
-    stop(paste("'",shapeb,"' is not a column name in the sample information in the inputed phyloseq object.
+  if (!(group %in% names(sample_data(physeq)))) {
+    stop(paste("'",group,"' is not a column name in the sample information in the inputed phyloseq object.
                   repeated_rarefaction needs an existing column to shape points in the ordination plot by.", sep=""))
   }
 
@@ -54,7 +54,7 @@ repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb
   # Perform the different steps of the repeated rarefaction algorithm 
   step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold, repeats)
   step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats)
-  step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, colorb, shapeb, cloud, ellipse)
+  step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse)
   print(step3)
   return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
 }
@@ -82,7 +82,6 @@ rep_raref <- function(count, threshold, repeats) {
   rarefied_matrices <- list()
 
   # Perform repeated rarefaction and store the normalized results in a list
-  # TODO: check if the use of bray curtis actually require normalization
   if (repeats >= 1) {
     for (i in 1:repeats) {
       rarefied_count <- rrarefy(count, sample = threshold)
@@ -165,12 +164,12 @@ ord_and_mean <- function(rarefied_matrix_list, repeats) {
 #' @param all_positions A dataframe containing position data for all repeats.
 #' @param mediant_positions A dataframe containing median position data for each original data point.
 #' @param color A string. Name of the column to color points by.
-#' @param shape A string. Name of the column to shape points by.
+#' @param shape A string. Name of the column to shape points by. Substitute by "group"
 #' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE.
 #' TRUE shows datapoints for all repeats.
 #' #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
 #' @returns Returns an ordination plot.
-plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, color, shape, cloud, ellipse) {
+plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse) {
   
   # Combine aligned ordinations into one data frame for plotting
   aligned_df <- data.frame()
@@ -178,21 +177,70 @@ plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, color, sh
   for (i in 1:length(aligned_ordinations)) {
     temp_df <- as.data.frame(aligned_ordinations[[i]])
     colnames(temp_df) <- c("Dim1", "Dim2")
-    temp_df$Sample <- rownames(aligned_ordinations[[i]])
-    temp_df$Ordination <- paste0("Ordination", i)
+    temp_df$sample_id <- rownames(aligned_ordinations[[i]])
+    temp_df$ordination <- paste0("Ordination", i)
+    temp_df[[color]] <- info[[color]]
+    temp_df[[group]] <- info[[group]]
     aligned_df <- rbind(aligned_df, temp_df)
   }
   
   # Convert consensus_coordinates to a data frame
   consensus_df <- as.data.frame(consensus_coordinates)
   colnames(consensus_df) <- c("Dim1", "Dim2")
-  consensus_df$Sample <- rownames(consensus_coordinates)
+  consensus_df$sample_id <- rownames(aligned_ordinations[[1]])
   
-  # Plot all aligned ordinations
-  plot <- ggplot() +
-    # Plot aligned ordinations with semi-transparency
-    geom_point(data = aligned_df, aes(x = Dim1, y = Dim2), color = "grey70", alpha = 0.3) +
-    # Overlay the consensus ordination with distinct color and size
+  # Determine how many colors are needed to plot the levels of the color variable
+  num_levels <- length(unique(consensus_df[[color]]))
+  
+  plot <- ggplot()
+  
+  if (cloud) {
+    if (num_levels <= 6) {
+      # Use variable-based coloring if there are 6 or fewer categories
+      plot <- plot +
+        geom_point(
+          data = aligned_df,
+          aes(x = Dim1, y = Dim2, color = .data[[color]]),
+          alpha = 0.3
+        )
+    } else {
+      # Use a fixed grey color for all points if there are more than 6 categories
+      plot <- plot +
+        geom_point(
+          data = aligned_df,
+          aes(x = Dim1, y = Dim2),
+          color = "grey70",
+          alpha = 0.3
+        )
+    }
+    
+    # If ellipse also = TRUE (you cannot draw ellipse if cloud = FALSE)
+    if (ellipse) {
+      if (num_levels <= 6) {
+        # Ellipses colored by the color variable
+        plot <- plot +
+          stat_ellipse(
+            data = aligned_df,
+            aes(x = Dim1, y = Dim2, color = .data[[color]], group = .data[[group]]),
+            linetype = 1, lwd = 0.8
+          )
+      } else {
+        # Ellipses in grey if more than 6 categories
+        # Still grouping by the color variable to get multiple ellipses if there are multiple groups
+        plot <- plot +
+          stat_ellipse(
+            data = aligned_df,
+            aes(x = Dim1, y = Dim2, group = .data[[group]]),
+            color = "grey70",
+            linetype = 1, lwd = 0.8
+          )
+      }
+    }
+    
+  }
+  
+  # Plot all aligned ordinations (consensus points)
+  plot <- plot +
     geom_point(data = consensus_df, aes(x = Dim1, y = Dim2), color = "red", size = 2) +
     theme_minimal() +
     ggtitle("Aligned Ordinations with Consensus Overlaid") +
@@ -201,4 +249,6 @@ plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, color, sh
   
   return(plot)
 }
+
+
 
