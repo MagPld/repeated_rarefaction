@@ -132,3 +132,5 @@ get_index_2 <- function(physeq, sample_info, repeats, threshold, group) {
 
   return(db_index)
 }
+
+
