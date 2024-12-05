@@ -77,6 +77,7 @@ get_index <- function(physeq, sample_info, repeats, threshold, method, sample_id
 
   # Extract just position data and create a list of "true" clusters
   just_positions <- as.data.frame(step2$df_median[,2:3])
+  
   cluster_true_pre <- unlist(step2$df_median[groupb])
   cluster_names <- list()
   cluster_true <- cluster_true_pre
@@ -88,6 +89,8 @@ get_index <- function(physeq, sample_info, repeats, threshold, method, sample_id
     cluster_true[x] <- which(existing_groups == cluster_true_pre[x])
   }
 
+  browser()
+  
   # Calculate index
   # It's possible to change which index is used
   # Currently it's set to G1

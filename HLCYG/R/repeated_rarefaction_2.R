@@ -52,9 +52,9 @@ repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb
   }
   
   # Perform the different steps of the repeated rarefaction algorithm 
-  step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold, repeats)
-  step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats)
-  step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse)
+  step1 <- rep_raref_2(data.frame(t(otu_table(physeq))), threshold, repeats)
+  step2 <- ord_and_mean_2(step1$rarefied_matrix_list, repeats)
+  step3 <- plot_rep_raref_2(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse)
   print(step3)
   return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
 }
@@ -69,7 +69,7 @@ repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb
 #' A value = 1 means only one iteration of rarefaction is perfomed and therefore no repeats.
 #' @returns A list containing a matrix with the repeated count table and another
 #' matrix with the repeated info.
-rep_raref <- function(count, threshold, repeats) {
+rep_raref_2 <- function(count, threshold, repeats) {
   if (repeats == 0) {
     warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
   }
@@ -103,7 +103,7 @@ rep_raref <- function(count, threshold, repeats) {
 #' @returns Returns a list containg an ordination object, a phyloseq object with
 #' the repeated count data, a dataframe with all positions from the ordination
 #' calculaction, and a datafram with just the median position from the calculation.
-ord_and_mean <- function(rarefied_matrix_list, repeats) {
+ord_and_mean_2 <- function(rarefied_matrix_list, repeats) {
   
   #========================= ordinations and plots generation
   
@@ -169,7 +169,7 @@ ord_and_mean <- function(rarefied_matrix_list, repeats) {
 #' TRUE shows datapoints for all repeats.
 #' #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
 #' @returns Returns an ordination plot.
-plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse) {
+plot_rep_raref_2 <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse) {
   
   # Combine aligned ordinations into one data frame for plotting
   aligned_df <- data.frame()
