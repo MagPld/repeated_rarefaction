@@ -64,9 +64,7 @@ test_threshold_2<- function(physeq, repeats = 10, t_min = 50, t_max = 250, t_ste
 #' @returns Returns the Calinski-Harabasz F-statistic score.
 get_index_2 <- function(physeq, sample_info, repeats, threshold, group) {
   # Calls the first two steps of the repeated rarefaction methods
-  
-  # a group information is not normally necessary for rep_raref but it is when is run to calculate
-  # the index for clustering performance
+
   step1 <- rep_raref_2(data.frame(t(otu_table(physeq))), threshold, repeats)
   step2 <- ord_and_mean_2(step1$rarefied_matrix_list, repeats)
   
@@ -89,11 +87,6 @@ get_index_2 <- function(physeq, sample_info, repeats, threshold, group) {
   # Extract just position data
   just_positions <- aligned_df[1:2]
   
-  # The only thing I need theoretically is true position and cluster membership. 
-  # However this still misses something. Because since we are not calculating cluster dispersion
-  # or not taking it into account, then what happens is that the median positions cannot
-  # worsen that much
-  
   # Determine clusters according to the "group" variable
   clusters <- unlist(aligned_df[[group]])
   # Identify unique values (corresponsing to number of clusters)
@@ -107,9 +100,35 @@ get_index_2 <- function(physeq, sample_info, repeats, threshold, group) {
   }
 
   # Calculate index
-  # It's possible to change which index is used
-  # Currently it's set to G1
   cluster_numbers <- as.numeric(unlist(cluster_numbers))
+  ## Auto calculation of centroids
+  #index <- clusterSim::index.DB(just_positions, cluster_numbers)
+  
+  ## Manual caculation with previously mshape determined centroids
 
-  return(clusterSim::index.G1(just_positions, cluster_numbers))
+  consensus_coords <- step2$consensus_coordinates
+  
+  # Calculate intra-cluster spread
+  intra_cluster_spread <- sapply(unique(cluster_numbers), function(k) {
+    cluster_points <- just_positions[cluster_numbers == k, ]  # Points in cluster k
+    centroid <- consensus_coords[k, ]  # Precomputed centroid for cluster k
+    mean(rowSums((cluster_points - centroid)^2))  # Mean squared Euclidean distance
+  })
+  
+  # Calculate inter-cluster distances
+  inter_cluster_distances <- as.matrix(dist(consensus_coords))  # Pairwise distances between centroids
+  diag(inter_cluster_distances) <- Inf  # Ignore self-distances
+  
+  # Calculate Davies-Bouldin Index
+  db_index <- mean(sapply(unique(cluster_numbers), function(i) {
+    s_i <- intra_cluster_spread[i]
+    ratios <- sapply(setdiff(unique(cluster_numbers), i), function(j) {
+      s_j <- intra_cluster_spread[j]
+      m_ij <- inter_cluster_distances[i, j]
+      (s_i + s_j) / m_ij  # Ratio for cluster i and j
+    })
+    max(ratios)  # Take the maximum ratio for cluster i
+  }))
+
+  return(db_index)
 }
