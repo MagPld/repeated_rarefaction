@@ -9,7 +9,11 @@
         BiocManager::install(missing_packages)
     }
     library(phyloseq)
-    library(vegan)
+    library(clusterSim)
     library(dplyr)
     library(ggplot2)
+    library(vegan)
+    library(geomorph)
+    library(doParallel)
+    library(foreach)
 }

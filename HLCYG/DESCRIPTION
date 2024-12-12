@@ -16,5 +16,8 @@ Imports:
     clusterSim (>= 0.51-3),
     dplyr (>= 1.1.3),
     ggplot2 (>= 3.4.3),
-    vegan (>= 2.6-4)
+    vegan (>= 2.6-4),
+    geomorph (>= 4.0.9),
+    doParallel (>= 1.0.17),
+    foreach (>= 1.5.2)
 LazyData: true

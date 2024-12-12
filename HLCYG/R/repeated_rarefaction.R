@@ -158,7 +158,7 @@ ord_and_mean <- function(repeat_count, repeat_info, sample_info, repeats, method
   rare_physeq_repeat <- phyloseq(rare_count_phy_repeat, sample_info_tab_phy_repeat)
 
   # Perform the Ordination calculation
-  vst_pcoa <- ordinate(rare_physeq_repeat, method = method, distance = "bray")
+  vst_pcoa <- phyloseq::ordinate(rare_physeq_repeat, method = method, distance = "bray")
 
   # Convert ordination result into a data frame object
   my_plot <- (plot_ordination(rare_physeq_repeat, vst_pcoa, justDF = TRUE))
@@ -195,7 +195,7 @@ plot_rep_raref <- function(ordination, physeq, all_positions, median_positions, 
 
   shape_median <- unlist(median_positions[shape])
   shape_tot <- unlist(all_positions[shape])
-
+  
   # Create the plot and print it
   p <- plot_ordination(physeq, ordination, color = color, shape = shape)
   if (!cloud) { p$layers <- p$layers[-1] }
