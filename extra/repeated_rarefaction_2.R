@@ -55,8 +55,10 @@ repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb
   step1 <- rep_raref_2(data.frame(t(otu_table(physeq))), threshold, repeats)
   step2 <- ord_and_mean_2(step1$rarefied_matrix_list, repeats)
   step3 <- plot_rep_raref_2(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse)
-  print(step3)
-  return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
+
+  print(step3$plot)
+  
+  return(invisible(list("repeats" = repeats, "df_consensus_coordinates" = step3$consensus_df, "df_all" = step3$df_all, "plot" = step3$plot)))
 }
 
 #' Rarefaction is performed repeatedly depending on input and a matrix containing all data is created together with a an info file reflecting it.
@@ -89,7 +91,7 @@ rep_raref_2 <- function(count, threshold, repeats) {
     }
   }
 
-  return(list("rarefied_matrix_list"=rarefied_matrices))
+  return(invisible(list("rarefied_matrix_list"=rarefied_matrices)))
 }
 
 #' Calculates ordination on the repeated count input and as well as a median result for each original datapoint.
@@ -153,7 +155,7 @@ ord_and_mean_2 <- function(rarefied_matrix_list, repeats) {
   # Compute consensus using mean shape
   consensus_coords <- mshape(aligned_array)
 
-  return(list("aligned_ordinations" = aligned_ordinations, "consensus_coordinates" = consensus_coords))
+  return(invisible(list("aligned_ordinations" = aligned_ordinations, "consensus_coordinates" = consensus_coords)))
 }
 
 
@@ -247,7 +249,7 @@ plot_rep_raref_2 <- function(aligned_ordinations, consensus_coordinates, info, c
     xlab("Dimension 1") +
     ylab("Dimension 2")
   
-  return(plot)
+  return(invisible(list("plot" = plot, "consensus_df" = consensus_df, "df_all" = aligned_df)))
 }
 
 
