@@ -8,6 +8,11 @@
         }
         BiocManager::install(missing_packages)
     }
+    
+    # Disable "rgl" creation of graphical windows, since we do not require
+    # this functionality from "geomorph".
+    options(rgl.useNULL = TRUE)
+    
     library(phyloseq)
     library(clusterSim)
     library(dplyr)
