@@ -11,14 +11,11 @@
 #' @examples
 #' test_threshold(HLCYG_physeq_data, repeats = 10, t_min = 200, t_max =1500, t_step = 5, group="location")
 test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step = 1, group = "sample_id") {
-  # Check if input is a Phyloseq object or a file path
+  # Check if input is a Phyloseq object
   if (inherits(input, "phyloseq")) {
     physeq <- input
-  } else if (is.character(input) && file.exists(input)) {
-    count_table <- read.table(input, header = TRUE, row.names = 1, check.names = FALSE)
-    physeq <- phyloseq(otu_table(count_table, taxa_are_rows = TRUE))
   } else {
-    stop("Input must be a Phyloseq object or a file path to an OTU count table (.csv or .tsv).")
+    stop("Input must be a Phyloseq object, including a count table and sample data.")
   }
   
   # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
@@ -63,7 +60,6 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
   })
   
   # =========================
-  # Remove Procrustes alignment
   # Instead, we will normalize all coordinates to unit variance.
   
   # Combine all points across all thresholds to compute global scaling parameters
