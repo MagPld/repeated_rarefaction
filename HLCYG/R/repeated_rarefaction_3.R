@@ -16,7 +16,13 @@
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=5, threshold=500, method="NMDS", colorb="sample_id", shapeb="location", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
-repeated_rarefaction_2 <- function(physeq, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE) {
+repeated_rarefaction_2 <- function(input, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE) {
+  # Check if input is a Phyloseq object
+  if (inherits(input, "phyloseq")) {
+    physeq <- input
+  } else {
+    stop("Input must be a Phyloseq object, including a count table and sample data.")
+  }
   
   # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
   # (this covers the case in which no sample_id column is present in the sample data)

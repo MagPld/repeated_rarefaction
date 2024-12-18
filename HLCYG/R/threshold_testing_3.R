@@ -11,14 +11,11 @@
 #' @examples
 #' test_threshold(HLCYG_physeq_data, repeats = 10, t_min = 200, t_max =1500, t_step = 5, group="location")
 test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step = 1, group = "sample_id") {
-  # Check if input is a Phyloseq object or a file path
+  # Check if input is a Phyloseq object
   if (inherits(input, "phyloseq")) {
     physeq <- input
-  } else if (is.character(input) && file.exists(input)) {
-    count_table <- read.table(input, header = TRUE, row.names = 1, check.names = FALSE)
-    physeq <- phyloseq(otu_table(count_table, taxa_are_rows = TRUE))
   } else {
-    stop("Input must be a Phyloseq object or a file path to an OTU count table (.csv or .tsv).")
+    stop("Input must be a Phyloseq object, including a count table and sample data.")
   }
   
   # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
@@ -26,13 +23,19 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
   # Then set it to a separate variable.
   sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
   
+  # Determine the thresholds to loop over between min and max and specified step.
   thresholds <- seq.int(t_min, t_max, by = t_step)
-  
-  # Store ordination points and centroids
-  ordination_points <- list()
-  consensus_coordinates <- list()
+  # Create the plot list which will hold the ordinations and the matrix which 
+  # will hold index calculations results.
+  plots <- list()
+  index_data <- matrix(nrow = 0, ncol = 3)
   
   for (y in repeats) {
+    # Create lists to store ordination points coordinates for a specific repeat 
+    # amount and centroid coordinates.
+    ordination_points <- list()
+    consensus_coordinates <- list()
+    
     for (x in thresholds) {
       message(paste("Running with", y, "repeats and", x, "threshold"))
       
@@ -53,48 +56,42 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
       colnames(consensus_coords) <- c("Dim1", "Dim2")
       consensus_coordinates[[paste0("threshold_", x)]] <- consensus_coords
     }
-  }
+    
+    # Flatten the list of lists containing individual repeat attempts for each threshold
+    # After flattening, each element in flattened_list corresponds to a single threshold and
+    # is a combined data frame (or matrix) of coordinates from all repeats for that threshold.
+    flattened_list <- lapply(ordination_points, function(sublist) {
+      do.call(rbind, sublist)
+    })
+    
+    # =========================
+    # Instead, we will normalize all coordinates to unit variance.
+    
+    # Combine all points across all thresholds to compute global scaling parameters
+    all_points <- do.call(rbind, flattened_list)
+    
+    # Compute global means and sds for each axis
+    axis_means <- colMeans(all_points, na.rm = TRUE)
+    axis_sds   <- apply(all_points, 2, sd, na.rm = TRUE)
+    
+    # Define a normalization function
+    normalize_coords <- function(mat, means, sds) {
+      sweep(sweep(mat, 2, means, "-"), 2, sds, "/")
+    }
+    
+    # Normalize each threshold's ordination points
+    scaled_points <- lapply(flattened_list, function(x) normalize_coords(x, axis_means, axis_sds))
+    
+    # Determine global axis limits after normalization (with some tolerance)
+    all_scaled_points <- do.call(rbind, scaled_points)
+    x_limits <- range(all_scaled_points[, 1], na.rm = TRUE)
+    y_limits <- range(all_scaled_points[, 2], na.rm = TRUE)
+    x_limits <- c(x_limits[1] - 0.2, x_limits[2] + 0.2)
+    y_limits <- c(y_limits[1] - 0.2, y_limits[2] + 0.2)
+    
+    # =====================
+    # Plotting and Index Calculation
   
-  # Flatten the list of lists containing individual repeat attempts for each threshold
-  # After flattening, each element in flattened_list corresponds to a single threshold and
-  # is a combined data frame (or matrix) of coordinates from all repeats for that threshold.
-  flattened_list <- lapply(ordination_points, function(sublist) {
-    do.call(rbind, sublist)
-  })
-  
-  # =========================
-  # Remove Procrustes alignment
-  # Instead, we will normalize all coordinates to unit variance.
-  
-  # Combine all points across all thresholds to compute global scaling parameters
-  all_points <- do.call(rbind, flattened_list)
-  
-  # Compute global means and sds for each axis
-  axis_means <- colMeans(all_points, na.rm = TRUE)
-  axis_sds   <- apply(all_points, 2, sd, na.rm = TRUE)
-  
-  # Define a normalization function
-  normalize_coords <- function(mat, means, sds) {
-    sweep(sweep(mat, 2, means, "-"), 2, sds, "/")
-  }
-  
-  # Normalize each threshold's ordination points
-  scaled_points <- lapply(flattened_list, function(x) normalize_coords(x, axis_means, axis_sds))
-  
-  # Determine global axis limits after normalization (with some tolerance)
-  all_scaled_points <- do.call(rbind, scaled_points)
-  x_limits <- range(all_scaled_points[, 1], na.rm = TRUE)
-  y_limits <- range(all_scaled_points[, 2], na.rm = TRUE)
-  x_limits <- c(x_limits[1] - 0.2, x_limits[2] + 0.2)
-  y_limits <- c(y_limits[1] - 0.2, y_limits[2] + 0.2)
-  
-  # =====================
-  # Plotting and Index Calculation
-  
-  plots <- list()
-  index_data <- matrix(nrow = 0, ncol = 3)
-  
-  for (y in repeats) {
     for (x in thresholds) {
       
       # Retrieve normalized data for this threshold
@@ -114,11 +111,9 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
       
       step3 <- plot_rep_raref_2(split_reps, norm_consensus, sample_data(physeq), color = group, group = group, cloud = TRUE, ellipse = TRUE, title = paste0("Threshold: ", x))
       plot <- step3$plot
-      plots[[current_key]] <- plot + xlim(x_limits) + ylim(y_limits)
+      plots[[paste0("repeat_number ", y)]][[current_key]] <- plot + xlim(x_limits) + ylim(y_limits)
       
       # ======================== Index calculation
-      
-      # aligned_df <- data.frame()
       info <- sample_data(physeq)
       
       # Fix the normalized consensus coordinates adding group variable
@@ -144,13 +139,14 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
 
       index_data <- rbind(index_data, c(toString(y), x, index))
     }
+    
   }
   
-  colnames(index_data) <- c("Repeat_Amount", "Threshold", "Index")
+  # Format the index_data matrix for plotting
   index_data <- as.data.frame(index_data)
+  colnames(index_data) <- c("Repeat_Amount", "Threshold", "Index")
   index_data$Threshold <- as.numeric(index_data$Threshold)
   index_data$Index <- as.numeric(index_data$Index)
-  
   # Plot the indexes
   index_plot <- ggplot(index_data, aes(x = Threshold, y = Index, color = Repeat_Amount)) +
     geom_point() +
