@@ -2,28 +2,42 @@
 #'
 #' @param physeq A phyloseq object.
 #' @param repeats A positive integer. Indicates the amount of repeats run.
-#' A value = 1 means no repeats are used.
-#' @param threshold A positive integer. The threshold value for the rarefaction.
-#' @param method A string. Currently only "NMDS" supported.
-#' @param sample_id A string. Name of the column with sample IDs.
+#' A value = 1 means no repeats are used. Default = 50.
+#' @param threshold A positive integer. The threshold value for the rarefaction. Default = 250
 #' @param colorb A string. Name of the column with data to colour the graph by.
 #' @param shapeb A string. Name of the column with data to shape the points on the graph by.
 #' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE.
 #' TRUE shows datapoints for all repeats.
 #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
+#' @param cores An int. The amount of cores used when running. The default = 4.
 #' @returns A list with repeat count table, repeat info table, ordination object,
 #' physeq object, dataframe with all repeat ordination positions, dataframe with median ordination positions, and ordination plot.
 #' @examples
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=5, threshold=500, method="NMDS", colorb="sample_id", shapeb="location", T, F)
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
 
-repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method ="NMDS", colorb, shapeb, cloud = FALSE, ellipse = TRUE) {
+
+repeated_rarefaction <- function(input, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE, cores = 4) {
+  # Check if input is a Phyloseq object
+  if (inherits(input, "phyloseq")) {
+    physeq <- input
+  } else {
+    stop("Input must be a Phyloseq object, including a count table and sample data.")
+  }
+  
+  # Make the rownames of the Phyloseq object a new "sample_id" variable for the sample data.
+  # (this covers the case in which no sample_id column is present in the sample data)
+  # Then set it to a separate variable.
+  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
+
+  # ============ Checks and warnings
+
   if (!(colorb %in% names(sample_data(physeq)))) {
     stop(paste("'",colorb,"' is not a column name in the sample information in the inputed phyloseq object.
                   repeated_rarefaction needs an existing column to color the ordination plot by.", sep=""))
   }
-  if (!(shapeb %in% names(sample_data(physeq)))) {
-    stop(paste("'",shapeb,"' is not a column name in the sample information in the inputed phyloseq object.
+  if (!(group %in% names(sample_data(physeq)))) {
+    stop(paste("'",group,"' is not a column name in the sample information in the inputed phyloseq object.
                   repeated_rarefaction needs an existing column to shape points in the ordination plot by.", sep=""))
   }
 
@@ -39,25 +53,22 @@ repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method =
     stop(paste("Input for threshold: '" ,threshold, "' is not an integer.", sep=""))
   }
 
-  if (!(method == "NMDS")){
-    stop("The only ordination method supported is NMDS.")
-  }
-
   if (repeats <=4 & ellipse == TRUE){
     warning("Too few repeats to draw confidence ellipses.")
     ellipse <- F
   }
 
-  sample_data(physeq)$sample_id <- rownames(sample_data(physeq))
-  sample_id <- "sample_id"
-  step1 <- rep_raref(as(otu_table(physeq), "matrix"), sample_data(physeq), threshold, repeats)
-  step2 <- ord_and_mean(step1$repeat_count, step1$repeat_info, sample_data(physeq), repeats, method, sample_id)
-  step3 <- plot_rep_raref(step2$ordinate_object, step2$physeq_object, step2$df_all, step2$df_median, colorb, shapeb, cloud, ellipse)
-  print(step3)
-  return(invisible(list("repeat_count" = step1$repeat_count, "repeat_info" = step1$repeat_info, "ordinate_object" = step2$ordinate_object, "physeq_object" = step2$physeq_object, "df_all" = step2$df_all, "df_median" = step2$df_median, "plot" = step3)))
+  # Perform the different steps of the repeated rarefaction algorithm
+  step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold, repeats)
+  step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats, cores)
+  step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse, "Aligned Ordinations with Consensus Overlaid")
+
+  print(step3$plot)
+
+  return(invisible(list("repeats" = repeats, "df_consensus_coordinates" = step3$consensus_df, "df_all" = step3$df_all, "plot" = step3$plot)))
 }
 
-#' Rarefaction is perforned reaptedly depending on input and a matrix containing all data is created together with a an info file reflecting it.
+#' Rarefaction is performed repeatedly depending on input and a matrix containing all data is created together with a an info file reflecting it.
 #'
 #' @param count A matrix. An otu-table containing the count data the rarefaction should be performed on.
 #' @param info Sample Data object from the phyloseq package.
@@ -67,7 +78,7 @@ repeated_rarefaction <- function(physeq, repeats = 10, threshold = 250, method =
 #' A value = 1 means only one iteration of rarefaction is perfomed and therefore no repeats.
 #' @returns A list containing a matrix with the repeated count table and another
 #' matrix with the repeated info.
-rep_raref <- function(count, info, threshold, repeats) {
+rep_raref <- function(count, threshold, repeats) {
   if (repeats == 0) {
     warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
   }
@@ -76,104 +87,75 @@ rep_raref <- function(count, info, threshold, repeats) {
     warning("repeats can't be negative. It needs to be a positive integer. Performs rarefaction without repetition.")
   }
 
-  # Set up working files and perform one initial rarefaction
-  rarified_count <- rrarefy(t(count), threshold)
-  duplicated_info <- info
-  sample_names_list1 <- row.names(info)
-  sample_names_list2 <- colnames(count)
+  # Set up working files
+  rarefied_matrices <- list()
 
-#  Perform repeated rarefaction
-#  If repeats = 1, skips loop as no repetitions are needed.
-
-  if (repeats > 1) {
-    # Preallocate memory based on expected dimensions
-    rarified_count <- matrix(NA, nrow = (repeats - 1) * nrow(rarified_count), ncol = ncol(rarified_count))
-    duplicated_info <-matrix(NA, nrow = (repeats - 1) * nrow(info), ncol = ncol(info))
-    sample_names_list1 <- character((repeats - 1) * nrow(info))
-    sample_names_list2 <- character((repeats - 1) * ncol(count))
-
-    # Initialize current row counters
-    current_row_rarified <- 1
-    current_row_info <- 1
-
-    for (x in 2:repeats) {
-      # Perform rarefaction
-      rarified_result <- rrarefy(t(count), threshold)
-
-      # Assign to preallocated matrix, ensuring range matches the number of rows
-      rarified_count[current_row_rarified:(current_row_rarified + nrow(rarified_result) - 1),] <- rarified_result
-      duplicated_info[current_row_info:(current_row_info + nrow(info) - 1),] <- as.matrix(info)
-
-      # Append sample names for this iteration
-      sample_names_list1[((x - 2) * nrow(info) + 1):((x - 1) * nrow(info))] <- paste0(row.names(info), "_", x)
-      sample_names_list2[((x - 2) * ncol(count) + 1):((x - 1) * ncol(count))] <- paste0(colnames(count), "_", x)
-
-      # Update the column indices
-      current_row_rarified <- current_row_rarified + nrow(rarified_result)
-      current_row_info <- current_row_info + nrow(info)
-    }
-
-    rownames(rarified_count) <- sample_names_list1
-    colnames(rarified_count) <- rownames(count)
-    rownames(duplicated_info) <- sample_names_list2
-    colnames(duplicated_info) <- colnames(info)
-
-    # Convert preallocated matrices to data frames if needed
-    rarified_count <- as.data.frame(rarified_count)
-    duplicated_info <- as.data.frame(duplicated_info)
-
+  # Perform repeated rarefaction and store the normalized results in a list
+  for (i in 1:repeats) {
+    rarefied_count <- rrarefy(count, sample = threshold)
+    rarefied_matrices[[i]] <- rarefied_count
   }
 
-  rarified_count <- decostand(rarified_count, "normalize")
-
-  # Transform both count data and info into dataframes
-  # Corrects row names for compatibility in ordination function.
-  duplicated_info <- as.data.frame(duplicated_info)
-  row.names(duplicated_info) <- sample_names_list1
-  rarified_count <- as.data.frame(rarified_count)
-  row.names(rarified_count) <- sample_names_list2
-
-  return(list("repeat_count" = rarified_count, "repeat_info" = duplicated_info))
+  return(invisible(list("rarefied_matrix_list"=rarefied_matrices)))
 }
 
 #' Calculates ordination on the repeated count input and as well as a median result for each original datapoint.
 #'
-#' @param repeat_count A matrix. Contains the repeated count data.
-#' @param repeat_info A matrix. Contains the repeated data info.
-#' @param sample_info Sample Data object from the phyloseq package. Contains data info without repetitions.
+#' @param rarified_matrix_list A matrix. Contains the repeated count data.
 #' @param repeats An integer. The amount of repeats that has been performed on the data.
-#' @param method A string. Currently only "NMDS" supported.
-#' @param sample_id A string. Name of the column with sample IDs.
 #' @returns Returns a list containg an ordination object, a phyloseq object with
 #' the repeated count data, a dataframe with all positions from the ordination
 #' calculaction, and a datafram with just the median position from the calculation.
-ord_and_mean <- function(repeat_count, repeat_info, sample_info, repeats, method, sample_id) {
-  if (!(sample_id %in% colnames(repeat_info))) {
-    stop(paste0(sample_id, " is not a column name in input for repeat_info."))
+ord_and_mean <- function(rarefied_matrix_list, repeats, cores = 4) {
+
+  #========================= ordinations and plots generation
+
+  # Initialize a list to store ordinations
+  ordinations <- list()
+
+  # Set up parallel backend
+  cl <- makeCluster(cores)
+  registerDoParallel(cl)
+
+  # Perform parallel computation using foreach
+  results <- foreach(i = 1:length(rarefied_matrix_list), .packages = c('vegan', 'ggplot2')) %dopar% {
+    # Calculate Bray-Curtis distance
+    dist_matrix <- vegdist(rarefied_matrix_list[[i]], method = "bray")
+
+    # Perform PCoA (Principal Coordinates Analysis)
+    ordination <- cmdscale(dist_matrix, k = 2)
+
+    # Convert ordination result to data frame
+    ord_df <- as.data.frame(ordination)
+    colnames(ord_df) <- c("PCoA1", "PCoA2")
+    ord_df$Sample <- rownames(ordination)
+
+    # Return a list containing the ordination and the plot
+    list(ordination = ordination)
+
   }
 
-  # Convert the input into physeq objects
-  rare_count_phy_repeat <- otu_table(t(repeat_count), taxa_are_rows = T)
-  sample_info_tab_phy_repeat <- sample_data(repeat_info)
-  rare_physeq_repeat <- phyloseq(rare_count_phy_repeat, sample_info_tab_phy_repeat)
+  # Stop the cluster after computation
+  stopCluster(cl)
 
-  # Perform the Ordination calculation
-  vst_pcoa <- phyloseq::ordinate(rare_physeq_repeat, method = method, distance = "bray")
 
-  # Convert ordination result into a data frame object
-  my_plot <- (plot_ordination(rare_physeq_repeat, vst_pcoa, justDF = TRUE))
+  # Extract ordinations and plots from the results
+  for (i in 1:length(results)) {
+    ordinations[[i]] <- results[[i]]$ordination
+  }
 
-  # Create matrix with median position for each sample
-  group_by_sample <- my_plot %>%
-    group_by(sample_id) %>%
-    summarise(
-      NMDS1 = median(NMDS1),
-      NMDS2 = median(NMDS2)
-    )
+  #================================ procrustes
 
-  df_median <- merge(group_by_sample, data.frame(sample_info), sample_id)
+  # Perform Procrustes analysis to align all ordinations to the first one
+  aligned_ordinations <- lapply(ordinations, function(x) procrustes(ordinations[[1]], x)$Yrot)
 
-  return(list("ordinate_object" = vst_pcoa, "physeq_object" = rare_physeq_repeat, "df_all" = my_plot, "df_median" = df_median))
+  # Convert list to array for consensus calculation
+  aligned_array <- array(unlist(aligned_ordinations), dim = c(nrow(aligned_ordinations[[1]]), ncol(aligned_ordinations[[1]]), length(aligned_ordinations)))
+
+  # Compute consensus using mean shape
+  consensus_coords <- mshape(aligned_array)
+
+  return(invisible(list("aligned_ordinations" = aligned_ordinations, "consensus_coordinates" = consensus_coords)))
 }
 
 
@@ -184,24 +166,92 @@ ord_and_mean <- function(repeat_count, repeat_info, sample_info, repeats, method
 #' @param all_positions A dataframe containing position data for all repeats.
 #' @param mediant_positions A dataframe containing median position data for each original data point.
 #' @param color A string. Name of the column to color points by.
-#' @param shape A string. Name of the column to shape points by.
+#' @param shape A string. Name of the column to shape points by. Substitute by "group"
 #' @param cloud Boolean. Aesthetic setting for the graph. Default is FALSE.
 #' TRUE shows datapoints for all repeats.
 #' #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
 #' @returns Returns an ordination plot.
-plot_rep_raref <- function(ordination, physeq, all_positions, median_positions, color, shape, cloud, ellipse) {
-  color_median <- unlist(median_positions[color])
-  color_tot <- unlist(all_positions[color])
+plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse, title) {
 
-  shape_median <- unlist(median_positions[shape])
-  shape_tot <- unlist(all_positions[shape])
-  
-  # Create the plot and print it
-  p <- plot_ordination(physeq, ordination, color = color, shape = shape)
-  if (!cloud) { p$layers <- p$layers[-1] }
-  p <- p + {if (ellipse) stat_ellipse(linetype = 1, lwd = 0.8, aes(color = color_tot, group = all_positions$sample_id))} +
-    {if (!cloud) geom_point(data = median_positions, mapping = aes(x = median_positions[, 2], y = median_positions[, 3], color = color_median, shape = shape_median))}
+  # Combine aligned ordinations into one data frame for plotting
+  aligned_df <- data.frame()
 
-  return(p)
+  for (i in 1:length(aligned_ordinations)) {
+    temp_df <- as.data.frame(aligned_ordinations[[i]])
+    colnames(temp_df) <- c("Dim1", "Dim2")
+    temp_df$sample_id <- rownames(aligned_ordinations[[i]])
+    temp_df$ordination <- paste0("Ordination", i)
+    temp_df[[color]] <- info[[color]]
+    temp_df[[group]] <- info[[group]]
+    aligned_df <- rbind(aligned_df, temp_df)
+  }
+
+  # Convert consensus_coordinates to a data frame
+  consensus_df <- as.data.frame(consensus_coordinates)
+  colnames(consensus_df) <- c("Dim1", "Dim2")
+  consensus_df$sample_id <- rownames(aligned_ordinations[[1]])
+
+  # Determine how many colors are needed to plot the levels of the color variable
+  num_levels <- length(unique(consensus_df[[color]]))
+
+  plot <- ggplot()
+
+  if (num_levels <= 6) {
+    # Use variable-based coloring if there are 6 or fewer categories
+    plot <- plot +
+      geom_point(
+        data = aligned_df,
+        aes(x = Dim1, y = Dim2, color = .data[[color]]),
+        alpha = 0.3
+      )
+  } else {
+    # Use a fixed grey color for all points if there are more than 6 categories
+    plot <- plot +
+      geom_point(
+        data = aligned_df,
+        aes(x = Dim1, y = Dim2),
+        color = "grey70",
+        alpha = 0.3
+      )
+  }
+
+  if (!cloud) {
+    plot$layers <- plot$layers[-1]
+  }
+
+  if (ellipse) {
+    if (num_levels <= 6) {
+      # Ellipses colored by the color variable
+      plot <- plot +
+        stat_ellipse(
+          data = aligned_df,
+          aes(x = Dim1, y = Dim2, color = .data[[color]], group = .data[[group]]),
+          linetype = 1, lwd = 0.8
+        )
+    } else {
+      # Ellipses in grey if more than 6 categories
+      # Still grouping by the color variable to get multiple ellipses if there are multiple groups
+      plot <- plot +
+        stat_ellipse(
+          data = aligned_df,
+          aes(x = Dim1, y = Dim2, group = .data[[group]]),
+          color = "grey70",
+          linetype = 1, lwd = 0.8
+        )
+    }
+  }
+
+  # Plot all aligned ordinations (consensus points)
+  plot <- plot +
+    geom_point(data = consensus_df, aes(x = Dim1, y = Dim2), color = "red", size = 2) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ggtitle(title) +
+    xlab("Dimension 1") +
+    ylab("Dimension 2")
+
+  return(invisible(list("plot" = plot, "consensus_df" = consensus_df, "df_all" = aligned_df)))
 }
+
+
 
