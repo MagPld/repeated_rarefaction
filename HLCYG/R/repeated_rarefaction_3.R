@@ -17,7 +17,7 @@
 #' repeated_rarefaction(HLCYG_physeq_data, repeats=10, threshold=250, method="NMDS", colorb="sample_id", shapeb="location", T, T)
 
 
-repeated_rarefaction_2 <- function(input, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE, cores = 4) {
+repeated_rarefaction <- function(input, repeats = 50, threshold = 250, colorb="sample_id", group="sample_id", cloud = TRUE, ellipse = FALSE, cores = 4) {
   # Check if input is a Phyloseq object
   if (inherits(input, "phyloseq")) {
     physeq <- input
@@ -59,9 +59,9 @@ repeated_rarefaction_2 <- function(input, repeats = 50, threshold = 250, colorb=
   }
 
   # Perform the different steps of the repeated rarefaction algorithm
-  step1 <- rep_raref_2(data.frame(t(otu_table(physeq))), threshold, repeats)
-  step2 <- ord_and_mean_2(step1$rarefied_matrix_list, repeats, cores)
-  step3 <- plot_rep_raref_2(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse, "Aligned Ordinations with Consensus Overlaid")
+  step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold, repeats)
+  step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats, cores)
+  step3 <- plot_rep_raref(step2$aligned_ordinations, step2$consensus_coordinates, sample_data(physeq), colorb, group, cloud, ellipse, "Aligned Ordinations with Consensus Overlaid")
 
   print(step3$plot)
 
@@ -78,7 +78,7 @@ repeated_rarefaction_2 <- function(input, repeats = 50, threshold = 250, colorb=
 #' A value = 1 means only one iteration of rarefaction is perfomed and therefore no repeats.
 #' @returns A list containing a matrix with the repeated count table and another
 #' matrix with the repeated info.
-rep_raref_2 <- function(count, threshold, repeats) {
+rep_raref <- function(count, threshold, repeats) {
   if (repeats == 0) {
     warning("repeats can't be 0. It needs to be a positive integer. Performs rarefaction without repetition.")
   }
@@ -91,11 +91,9 @@ rep_raref_2 <- function(count, threshold, repeats) {
   rarefied_matrices <- list()
 
   # Perform repeated rarefaction and store the normalized results in a list
-  if (repeats >= 1) {
-    for (i in 1:repeats) {
-      rarefied_count <- rrarefy(count, sample = threshold)
-      rarefied_matrices[[i]] <- rarefied_count
-    }
+  for (i in 1:repeats) {
+    rarefied_count <- rrarefy(count, sample = threshold)
+    rarefied_matrices[[i]] <- rarefied_count
   }
 
   return(invisible(list("rarefied_matrix_list"=rarefied_matrices)))
@@ -108,15 +106,14 @@ rep_raref_2 <- function(count, threshold, repeats) {
 #' @returns Returns a list containg an ordination object, a phyloseq object with
 #' the repeated count data, a dataframe with all positions from the ordination
 #' calculaction, and a datafram with just the median position from the calculation.
-ord_and_mean_2 <- function(rarefied_matrix_list, repeats, cores = 4) {
+ord_and_mean <- function(rarefied_matrix_list, repeats, cores = 4) {
 
   #========================= ordinations and plots generation
 
   # Initialize a list to store ordinations
   ordinations <- list()
 
-  # Set up parallel backend to use available cores
-  # numCores <- detectCores() - 1  , Use one less than the total number of cores
+  # Set up parallel backend
   cl <- makeCluster(cores)
   registerDoParallel(cl)
 
@@ -174,7 +171,7 @@ ord_and_mean_2 <- function(rarefied_matrix_list, repeats, cores = 4) {
 #' TRUE shows datapoints for all repeats.
 #' #' @param ellipse Boolean. Aesthetic setting for the graph. Default is TRUE.
 #' @returns Returns an ordination plot.
-plot_rep_raref_2 <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse, title) {
+plot_rep_raref <- function(aligned_ordinations, consensus_coordinates, info, color, group, cloud, ellipse, title) {
 
   # Combine aligned ordinations into one data frame for plotting
   aligned_df <- data.frame()
@@ -216,12 +213,11 @@ plot_rep_raref_2 <- function(aligned_ordinations, consensus_coordinates, info, c
         color = "grey70",
         alpha = 0.3
       )
-    }
+  }
 
   if (!cloud) {
     plot$layers <- plot$layers[-1]
   }
-
 
   if (ellipse) {
     if (num_levels <= 6) {

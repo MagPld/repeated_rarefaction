@@ -41,8 +41,8 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
     for (x in thresholds) {
       message(paste("Running with", y, "repeats and", x, "threshold"))
 
-      step1 <- rep_raref_2(data.frame(t(otu_table(physeq))), threshold = x, repeats = y)
-      step2 <- ord_and_mean_2(step1$rarefied_matrix_list, repeats)
+      step1 <- rep_raref(data.frame(t(otu_table(physeq))), threshold = x, repeats = y)
+      step2 <- ord_and_mean(step1$rarefied_matrix_list, repeats)
 
       # step2 should return something like:
       # $aligned_ordinations: A list of ordination coordinates for each repeat
@@ -111,7 +111,7 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
       # 'consensus_coordinates' should also be normalized.
       norm_consensus <- normalize_coords(consensus_coordinates[[current_key]], axis_means, axis_sds)
 
-      step3 <- plot_rep_raref_2(split_reps, norm_consensus, sample_data(physeq), color = group, group = group, cloud = TRUE, ellipse = TRUE, title = paste0("Threshold: ", x))
+      step3 <- plot_rep_raref(split_reps, norm_consensus, sample_data(physeq), color = group, group = group, cloud = TRUE, ellipse = TRUE, title = paste0("Threshold: ", x))
       plot <- step3$plot
 
       plots[[paste0("repeat_number ", y)]][[current_key]] <- plot + xlim(x_limits) + ylim(y_limits)
