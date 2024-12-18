@@ -155,7 +155,7 @@ test_threshold <- function(input, repeats = 10, t_min = 50, t_max = 250, t_step 
   index_plot <- ggplot(index_data, aes(x = Threshold, y = Index, color = Repeat_Amount)) +
     geom_point() +
     labs(x = "Rarefaction Threshold", y = "Calinski-Harabasz pseudo F-statistic") +
-    geom_smooth(method = "lm", formula = y ~ poly(x, 2))
+    geom_smooth()
   
   return(list(index_plot = index_plot, ordination_plots = plots))
 }
